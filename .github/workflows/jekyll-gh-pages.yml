@@ -1,0 +1,104 @@
+name: Deploy Jekyll to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+
+  # Lint, test and build
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build site
+        run: npm run build
+
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Production artifacts
+          path: public
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/slack@v3
+        with: 
+          status: ${{ job.status }}
+
+  # Security checks  
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Vulnerability scanning
+        uses: actions/scan-for-secrets@v3
+
+      - name: Bandit security checks
+        uses: actions/bandit@v2
+        with:
+          bandit-args: public/
+
+      - name: Notify on failure
+        if: failure() 
+        uses: actions/slack@v3
+        with:
+          status: ${{ job.status }}
+
+  # Deploy to GitHub Pages
+  deploy:
+    needs: [build, security]
+    runs-on: ubuntu-latest
+
+    steps:  
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: Production artifacts  
+          path: public
+
+      - name: Tag release 
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a ${{ github.sh -m "Deploying ${{ github.sha }}"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+
+      - name: Notify on deployment
+        if: success()
+        uses: actions/slack@v3
+        with:
+          status: Deployed ${{ github.sha }} to GitHub Pages
