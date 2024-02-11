@@ -18,9 +18,11 @@ name: Coverity
 #
 # By default, the builds are submitted to the Coverity project `git`. To override this,
 # set the repository variable `COVERITY_PROJECT`.
-
+  
 on:
   push:
+  pull_request:
+    branches: ["*"]
 
 defaults:
   run:
